@@ -85,6 +85,11 @@ int main(void)
 {
     WDTCTCL = WDTPW + WDTHOLD; // wylaczenie watchdoga
 
+	CCTL0 = CCIE;			// CCR0 interrupt enabled -OK -zalaczamy przerwania do timerow (jak nie zadziala wlaczac osobna TA i TB)
+	// Timer A
+	TACTL = TASSEL_2 + MC_1 + ID_0;           // SMCLK/8, upmode -OK SMCLK = 1MHz; MC_1 - UP MODE; ID_0 - dzielnik /1 (nie musi byc, ale niech bedzie)
+	TACCR0 =  1000;                     // 1 kHz   
+  
     // inicjalizacja portu P1
     P1SEL |= (BIT0 + BIT7); // ustaw P1.0 i P1.7 jako GPIO
     P1DIR &= ~(BIT0 + BIT7); // ustaw jako wejscia
