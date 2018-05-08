@@ -117,6 +117,8 @@ int main(void)
 
     __enable_interrupt();
 	
+	SR |= CPUOFF + GIE; // LPM0
+	
 	while(1)
 	{
 		
