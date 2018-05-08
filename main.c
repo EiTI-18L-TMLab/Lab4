@@ -79,7 +79,7 @@ uint8_t decode(char ch);
 
 volatile uint32_t count_time;
 volatile bool if_counting;
-volatile bool 
+//volatile bool 
 
 int main(void)
 {
@@ -91,10 +91,11 @@ int main(void)
 	TACCR0 =  1000;                     // 1 kHz   
   
     // inicjalizacja portu P1
-    P1SEL |= (BIT0 + BIT7); // ustaw P1.0 i P1.7 jako GPIO
+    //P1SEL |= (BIT0 + BIT7); // ustaw P1.0 i P1.7 jako GPIO
+    P1SEL &= ~(BIT0 + BIT7); // ustaw P1.0 i P1.7 jako GPIO
     P1DIR &= ~(BIT0 + BIT7); // ustaw jako wejscia
-    P1REN |= (BIT0 + BIT7); // umozliwia pullup 
     P1OUT |= (BIT0 + BIT7); // pullup
+    P1REN |= (BIT0 + BIT7); // umozliwia pullup 
 
     P1IES |= (BIT0 + BIT7); // zbocze opadajace
     P1IE = BIT0; //wlaczenie przerwan
@@ -115,6 +116,11 @@ int main(void)
     if_counting = false;
 
     __enable_interrupt();
+	
+	while(1)
+	{
+		
+	}
 
 }
 
@@ -137,7 +143,7 @@ __interrupt void Port_1(void)
 
 
 #pragma vector=TIMERA0_VECTOR
-__interrupt void display(void)
+__interrupt void display(void) // timer 1kHz
 {
     static uint8_t disp = 0; //ktory segment ma byc podswietlony
     static bool parity_clk = true; //odswiezamy co drugie cykniec
@@ -146,7 +152,7 @@ __interrupt void display(void)
 
     if(disp == 0) locked_time = count_time; //zatrzaskujemy wartosc na czas sekwencji wyswietlania 
 
-    if(parity_clk) 
+    if(parity_clk) // start sekwencji wyswietlania co drugie wejscie do obsługi przerwania od timera
     {
         parity_clk = false;
         P3OUT &= 0x00; // gasimy poprzedni wyswietlacz
