@@ -37,14 +37,6 @@
         |--> SEG_6 - P2OUT.6
         |--> SEG_7 - P2OUT.7
 
-        ##############################################
-        ##############################################
-
-        ZAJRZYJ KOLEGO DROGI DO KOMENTARZA NA DOLE, PRZED FUNKCJAMI PRZERWAN
-
-        ###################################################
-        ###################################################
-
 */
 
 #include <msp430.h>
@@ -79,8 +71,17 @@ struct captured_cycles
 
 int get_cycles(captured_cycles time)
 {
-    return num_of_overflows*1000 + end_time - start_time;
+    return (num_of_overflows + 1)*1000 + end_time - start_time;
 }
+
+int get_time(int cycles)
+{
+    return (int)(cycles/1000);
+}
+volatile captured_cycles cap_time;
+cap_time.start_time = 0;
+cap_time.num_of_overflows = 0;
+cap_time.end_time = 0;
 
 int main(void)
 {
@@ -95,7 +96,7 @@ int main(void)
     TACCTL1 =  CM_2 + SCS + CAP + CCIE + CCIS_0;  // falling edge, synchronus capture, CCI1A
 
     // Inicjacja kanalu 2, capture, przycisk stop
-    TACCTL2 =  CM_2 + SCS + CAP + CCIE + CCIS_0;  // falling edge, synchronus capture, CCI2A
+    TACCTL2 =  CM_0 + SCS + CAP + CCIE + CCIS_0;  // falling edge, synchronus capture, CCI2A
 
     // Inicjacja Timera A
     TACTL = TASSEL_2 + MC_1 + ID_0 + TAIE;           // SMCLK/8, upmode -OK SMCLK = 1MHz; MC_1 - UP MODE; ID_0 - dzielnik /1 (nie musi byc, ale niech bedzie)
@@ -108,13 +109,13 @@ int main(void)
     //P1IE = BIT7; //wlaczenie przerwan
 
     // inicjalizacja portu P2
-    P2SEL = 0x00; // ustaw ca�y port 2 jako GPIO
-    P2DIR = 0xFF; // ustaw port 2 jako wyj�cia
+    P2SEL = 0x00; // ustaw caly port 2 jako GPIO
+    P2DIR = 0xFF; // ustaw port 2 jako wyjscia
     P2OUT = 0x00; // domyslnie zero
 
     // inicjalizacja portu P3
-    P3SEL = 0x00; // ustaw ca�y port 3 jako GPIO
-    P3DIR = 0xFF; // ustaw port 3 jako wyj�cia
+    P3SEL = 0x00; // ustaw caLy port 3 jako GPIO
+    P3DIR = 0xFF; // ustaw port 3 jako wyjscia
     P3OUT = 0xFF; // wyswietl wszedzie zera
     // pomysl ficzera: test wyswietlaczy (zapalanie wszystkiego)
 
@@ -128,29 +129,10 @@ int main(void)
     //return 0;
 }
 
-/*
- * Hello motherfucker ;)
- * wykorzystujemy jeden timer, a w nim trzy kanaly,
- *  0 - compare, podstawa czasu 1ms
- *  1 - capture, przycisk START, aktywny zboczem opadajacym
- *  2 - capture, przycisk STOP, aktywny zboczem opadajacym
- *  zrobione tak aby moc doprowadzic sygnaly zewnetrzne do timera,
- *  nie dalo sie doprowadzic dwoch sygnalow do jednego kanalu z opcja przelaczania w locie
- *
- * mamy dwa wektory przerwan od timera A - A0 i A1 (strona 368 w mps430 user manual-u)
- * propozycja wykonania - mysl moja:
- * A0 - CCIFG_0_HANDLER
- *  przepelnienie od compare co 1ms
- * A1 - TAIFG_HANDLER(podobne do poprzedniego, nie jestem pewny jak to sie zachowa),
- *      CCIFG_2_HND - przerwanie zgloszone przez kanal 2 - capture STOP
- *      CCIFG_1_HND - przerwanie zgloszone przez kanal 1 - capture START
- *
- */
-
-
 #pragma vector=TIMERA0_VECTOR   // TIMERA0_VECTOR - wektor do obslugi compare, kanal 0
 __interrupt void timerA0_ISR(void) // timer 1kHz
-{
+{   
+    cap_time.num_of_overflows++;
     static uint16_t disp = 0; //ktory segment ma byc podswietlony
     static uint16_t led_timer = 0; //odswiezamy co drugie cykniecie
     static char disp_buffer[SEG_LED_NUMBER]; // Bufor wyswietlanych znakow
@@ -188,7 +170,7 @@ __interrupt void timerA0_ISR(void) // timer 1kHz
         led_timer = 1; // co drugie wejscie do obslugi przerwania od timera
 
         P3OUT = ~(1<<disp); //aktywujemy kolejny wyswietlacz
-        P2OUT = ((disp_buffer[disp])&0x0F) | LED_RBI | LED_BI | LED_LT | LED_DP; // wyswietlenie cyfry oraz bity steruj�ce
+        P2OUT = ((disp_buffer[disp])&0x0F) | LED_RBI | LED_BI | LED_LT | LED_DP; // wyswietlenie cyfry oraz bity sterujace
         if(disp == SEG_LED_DOT_POSITION) P2OUT &= ~LED_DP; // zapalenie kropki na odpowiedniej pozycji
         disp++; // wybor kolejnego wyswietlacza
         if(disp >= SEG_LED_NUMBER) disp = 0;
@@ -202,11 +184,26 @@ __interrupt void timerA1_ISR(void)
     switch(TAIV) //odczyt TAIV
     {
         case 2: //flaga CCIFG
+            cap_time.start_time = TACCR1;
+            cap_time.num_of_overflows = 0;
+            cap_time.end_time = 0;
+
+            TACCTL1 &= ~CM_2;
+            TACCTL1 |= CM_0;
+            TACCTL2 &= ~CM_0;
+            TACCTL2 |= CM_2;
+
             break; //zrodlo TACCR1
+
         case 4: //flaga CCIFG
+            cap_time.end_time = TACCR2;
+
+            TACCTL1 &= ~CM_0;
+            TACCTL1 |= CM_2;
+            TACCTL2 &= ~CM_2;
+            TACCTL2 |= CM_0;
+
             break; //zrodlo TACCR2
-        case 10: //flaga TAIFG
-            break; //zrodlo TAR overflow
     }       
 
 
