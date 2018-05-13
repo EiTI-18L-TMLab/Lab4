@@ -8,14 +8,14 @@
         Jakub Sikora
         Marcin Dolicher
 ---------------------------------------------------
-    Oznaczenia portów:
+    Oznaczenia portow:
 
-    Port 1 (P1) - obs³uga przyciskow - robimy na dwóch kana³ach
+    Port 1 (P1) - obsluga przyciskow - robimy na dwoch kanalach
         |
-        |--> Pin 2, start, CCI1A input - capture (kana³ 1)
-        |--> Pin 3, stop, CCI2A input - capture (kana³ 2)
+        |--> Pin 2, start, CCI1A input - capture (kanal 1)
+        |--> Pin 3, stop, CCI2A input - capture (kanal 2)
 
-    Port 2 (P2) - obs³uga drivera 7-seg LED
+    Port 2 (P2) - obsluga drivera 7-seg LED
         |
         |--> DATA_A - P2OUT.0
         |--> DATA_B - P2OUT.1
@@ -26,7 +26,7 @@
         |--> LT     - P2OUT.6
         |--> DP     - P2OUT.7
 
-    Port 3 (P3) - wybór wyœwietlacza 7-segmentowego
+    Port 3 (P3) - wybï¿½r wyï¿½wietlacza 7-segmentowego
         |
         |--> SEG_0 - P2OUT.0
         |--> SEG_1 - P2OUT.1
@@ -40,7 +40,7 @@
         ##############################################
         ##############################################
 
-        ZAJRZYJ KOLEGO DROGI DO KOMENTARZA NA DOLE, PRZED FUNKCJAMI PRZERWAÑ
+        ZAJRZYJ KOLEGO DROGI DO KOMENTARZA NA DOLE, PRZED FUNKCJAMI PRZERWAN
 
         ###################################################
         ###################################################
@@ -55,20 +55,32 @@
 #define true 1
 #define false 0
 
-// Bity steruj¹ce driverem 7-SEG LED
+// Bity sterujace driverem 7-SEG LED
 #define LED_DP (1<<7)
 #define LED_LT (1<<6)
 #define LED_BI (1<<5)
 #define LED_RBI (1<<4)
 
-// Iloœæ wyœwietlanych znaków
+// Ilosc wyswietlanych znakow
 #define SEG_LED_NUMBER 6
 #define SEG_LED_DOT_POSITION 3
 #define SEG_LED_DISPLAY_SYSTEM 10
 
 volatile char buffer[SEG_LED_NUMBER]; // BUFOR ZLICZANIA CZASU REAKCJI
-volatile uint32_t count_time = 0; // wartoœc czasu reakcji
+volatile uint32_t count_time = 0; // wartosc czasu reakcji
 volatile bool if_counting = false;
+
+struct captured_cycles
+{
+    int start_time;
+    int num_of_overflows;
+    int end_time;
+}
+
+int get_cycles(captured_cycles time)
+{
+    return num_of_overflows*1000 + end_time - start_time;
+}
 
 int main(void)
 {
@@ -96,17 +108,17 @@ int main(void)
     //P1IE = BIT7; //wlaczenie przerwan
 
     // inicjalizacja portu P2
-    P2SEL = 0x00; // ustaw ca³y port 2 jako GPIO
-    P2DIR = 0xFF; // ustaw port 2 jako wyjœcia
+    P2SEL = 0x00; // ustaw caï¿½y port 2 jako GPIO
+    P2DIR = 0xFF; // ustaw port 2 jako wyjï¿½cia
     P2OUT = 0x00; // domyslnie zero
 
     // inicjalizacja portu P3
-    P3SEL = 0x00; // ustaw ca³y port 3 jako GPIO
-    P3DIR = 0xFF; // ustaw port 3 jako wyjœcia
+    P3SEL = 0x00; // ustaw caï¿½y port 3 jako GPIO
+    P3DIR = 0xFF; // ustaw port 3 jako wyjï¿½cia
     P3OUT = 0xFF; // wyswietl wszedzie zera
     // pomysl ficzera: test wyswietlaczy (zapalanie wszystkiego)
 
-    _bis_SR_register(CPUOFF+GIE); // LPM0, globalne w³¹czenie obs³ugi przerwañ
+    _bis_SR_register(CPUOFF+GIE); // LPM0, globalne wlaczenie obslugi przerwan
 
     while(true)
     {
@@ -117,61 +129,31 @@ int main(void)
 }
 
 /*
-#pragma vector=PORT1_VECTOR
-__interrupt void Port_1(void)
-{
-    if(P1IFG & BIT0) // konczymy zliczac
-    {
-        P1IE &= ~BIT0;
-        P1IE |= BIT7;
-        P1IFG &= ~(BIT0 + BIT7);
-        if_counting = false;
-        // tu zastopuj timer
-    }
-
-    if(P1IFG & BIT7) // zaczynamy zliczac
-    {
-        P1IE |= BIT0;
-        P1IE &= ~BIT7;
-        P1IFG &= ~(BIT0 + BIT7);
-        count_time = 0; // wyczyszczenie starej zliczonej wartoœci
-        uint16_t n=0;
-        while( n<SEG_LED_NUMBER )
-        {
-            buffer[n] = 0;
-            n++;
-        }
-        if_counting = true;
-    }
-}
-*/
-
-/*
  * Hello motherfucker ;)
- * wykorzystujemy jeden timer, a w nim trzy kana³y,
+ * wykorzystujemy jeden timer, a w nim trzy kanaly,
  *  0 - compare, podstawa czasu 1ms
  *  1 - capture, przycisk START, aktywny zboczem opadajacym
- *  2 - capture, przycisk STOP, aktywny zboczem opadaj¹cym
- *  zrobione tak aby móc doprowadziæ sygna³y zewnêtrzne do timera,
- *  nie da³o siê doprowadziæ dwóch sygna³ów do jednego kana³u z opcj¹ prze³¹czania w locie
+ *  2 - capture, przycisk STOP, aktywny zboczem opadajacym
+ *  zrobione tak aby moc doprowadzic sygnaly zewnetrzne do timera,
+ *  nie dalo sie doprowadzic dwoch sygnalow do jednego kanalu z opcja przelaczania w locie
  *
- * mamy dwa wektory przerwañ od timera A - A0 i A1 (strona 368 w mps430 user manual-u)
- * propozycja wykonania - myœl moja:
+ * mamy dwa wektory przerwan od timera A - A0 i A1 (strona 368 w mps430 user manual-u)
+ * propozycja wykonania - mysl moja:
  * A0 - CCIFG_0_HANDLER
- *  przepe³nienie od compare co 1ms
- * A1 - TAIFG_HANDLER(podobne do poprzedniego, nie jestem pewny jak to siê zachowa),
- *      CCIFG_2_HND - przerwanie zg³oszone przez kana³ 2 - capture STOP
- *      CCIFG_1_HND - przerwanie zg³oszone przez kana³ 1 - capture START
+ *  przepelnienie od compare co 1ms
+ * A1 - TAIFG_HANDLER(podobne do poprzedniego, nie jestem pewny jak to sie zachowa),
+ *      CCIFG_2_HND - przerwanie zgloszone przez kanal 2 - capture STOP
+ *      CCIFG_1_HND - przerwanie zgloszone przez kanal 1 - capture START
  *
  */
 
 
-#pragma vector=TIMERA0_VECTOR   // TIMERA0_VECTOR - wektor do obs³ugi capture, kana³ 0
+#pragma vector=TIMERA0_VECTOR   // TIMERA0_VECTOR - wektor do obslugi compare, kanal 0
 __interrupt void timerA0_ISR(void) // timer 1kHz
 {
     static uint16_t disp = 0; //ktory segment ma byc podswietlony
-    static uint16_t led_timer = 0; //odswiezamy co drugie cykniec
-    static char disp_buffer[SEG_LED_NUMBER]; // Bufor wyœwietlanych znakow
+    static uint16_t led_timer = 0; //odswiezamy co drugie cykniecie
+    static char disp_buffer[SEG_LED_NUMBER]; // Bufor wyswietlanych znakow
 
     if(if_counting)
     {
@@ -191,7 +173,7 @@ __interrupt void timerA0_ISR(void) // timer 1kHz
         }
     }
 
-    if( disp==0 ) // Przekopiowanie buforów
+    if( disp==0 ) // Przekopiowanie buforow
     {
         uint16_t n=0;
         while( n<SEG_LED_NUMBER )
@@ -203,21 +185,29 @@ __interrupt void timerA0_ISR(void) // timer 1kHz
 
     if(led_timer==0) // start sekwencji wyswietlania, 1kHz/2
     {
-        led_timer = 1; // co drugie wejscie do obs³ugi przerwania od timera
+        led_timer = 1; // co drugie wejscie do obslugi przerwania od timera
 
         P3OUT = ~(1<<disp); //aktywujemy kolejny wyswietlacz
-        P2OUT = ((disp_buffer[disp])&0x0F) | LED_RBI | LED_BI | LED_LT | LED_DP; // wyœwietlenie cyfry oraz bity steruj¹ce
+        P2OUT = ((disp_buffer[disp])&0x0F) | LED_RBI | LED_BI | LED_LT | LED_DP; // wyswietlenie cyfry oraz bity sterujï¿½ce
         if(disp == SEG_LED_DOT_POSITION) P2OUT &= ~LED_DP; // zapalenie kropki na odpowiedniej pozycji
-        disp++; // wybór kolejnego wyœwietlacza
+        disp++; // wybor kolejnego wyswietlacza
         if(disp >= SEG_LED_NUMBER) disp = 0;
     }
     else led_timer--;
 }
 
-#pragma vector=TIMERA1_VECTOR   // TIMERA1_VECTOR - wektor do obs³ugi capture, kana³ 1, 2
+#pragma vector=TIMERA1_VECTOR   // TIMERA1_VECTOR - wektor do obslugi capture, kanal 1, 2
 __interrupt void timerA1_ISR(void)
 {
-
+    switch(TAIV) //odczyt TAIV
+    {
+        case 2: //flaga CCIFG
+            break; //zrodlo TACCR1
+        case 4: //flaga CCIFG
+            break; //zrodlo TACCR2
+        case 10: //flaga TAIFG
+            break; //zrodlo TAR overflow
+    }       
 
 
 
