@@ -78,10 +78,70 @@ int get_time(int cycles)
 {
     return (int)(cycles/1000);
 }
+
+void temp_time()
+{
+    //count_time++; - bo juz mamy
+    buffer[0]++;
+    uint16_t n = 0;
+    while( n<SEG_LED_NUMBER )
+    {
+        if( buffer[n]>=SEG_LED_DISPLAY_SYSTEM )
+        {
+            buffer[n]=0;
+            buffer[n+1]++;
+            n++;
+        }
+        else
+            break;
+    }
+}
+
+void copy_buffer(int disp_buffer[], int SEG_LED_NUMBER)
+{
+	uint16_t n=0;
+    while( n<SEG_LED_NUMBER )
+    {
+        disp_buffer[n] = buffer[n]; // buffer mamy globalny
+        n++;
+    }
+    
+}
+
+void display(static uint16_t disp, int disp_buffer[], int SEG_LED_NUMBER)
+{
+	if(led_timer==0) // start sekwencji wyswietlania, 1kHz/2
+    {
+        led_timer = 1; // co drugie wejscie do obslugi przerwania od timera
+
+        P3OUT = ~(1<<disp); //aktywujemy kolejny wyswietlacz
+        P2OUT = ((disp_buffer[disp])&0x0F) | LED_RBI | LED_BI | LED_LT | LED_DP; // wyswietlenie cyfry oraz bity sterujace
+        if(disp == SEG_LED_DOT_POSITION) P2OUT &= ~LED_DP; // zapalenie kropki na odpowiedniej pozycji
+        disp++; // wybor kolejnego wyswietlacza
+        if(disp >= SEG_LED_NUMBER) disp = 0;
+    }
+    else led_timer--;
+}
+
+void preapare_to_display_ideal_value(captured_cycles cap_time)
+{
+    	locked_time = get_time(get_cycles(captured_cycles cap_time)); //zatrzaskujemy wartosc na czas sekwencji wyswietlania
+
+        uint8_t n=0;
+		while(n<6)
+		{
+			buffer[n]=locked_time % 10;
+			locked_time /= 10;
+			n++;
+		}
+}
+
 volatile captured_cycles cap_time;
 cap_time.start_time = 0;
 cap_time.num_of_overflows = 0;
 cap_time.end_time = 0;
+
+int end_of_counting=0
 
 int main(void)
 {
@@ -137,45 +197,27 @@ __interrupt void timerA0_ISR(void) // timer 1kHz
     static uint16_t led_timer = 0; //odswiezamy co drugie cykniecie
     static char disp_buffer[SEG_LED_NUMBER]; // Bufor wyswietlanych znakow
 
-    if(if_counting)
-    {
-        count_time++;
-        buffer[0]++;
-        uint16_t n = 0;
-        while( n<SEG_LED_NUMBER )
-        {
-            if( buffer[n]>=SEG_LED_DISPLAY_SYSTEM )
-            {
-                buffer[n]=0;
-                buffer[n+1]++;
-                n++;
-            }
-            else
-                break;
-        }
-    }
-
-    if( disp==0 ) // Przekopiowanie buforow
-    {
-        uint16_t n=0;
-        while( n<SEG_LED_NUMBER )
-        {
-            disp_buffer[n] = buffer[n];
-            n++;
-        }
-    }
-
-    if(led_timer==0) // start sekwencji wyswietlania, 1kHz/2
-    {
-        led_timer = 1; // co drugie wejscie do obslugi przerwania od timera
-
-        P3OUT = ~(1<<disp); //aktywujemy kolejny wyswietlacz
-        P2OUT = ((disp_buffer[disp])&0x0F) | LED_RBI | LED_BI | LED_LT | LED_DP; // wyswietlenie cyfry oraz bity sterujace
-        if(disp == SEG_LED_DOT_POSITION) P2OUT &= ~LED_DP; // zapalenie kropki na odpowiedniej pozycji
-        disp++; // wybor kolejnego wyswietlacza
-        if(disp >= SEG_LED_NUMBER) disp = 0;
-    }
-    else led_timer--;
+	if(end_of_counting)
+	{
+		preapare_to_display_ideal_value(captured_cycles cap_time)
+		display(disp, disp_buffer, SEG_LED_NUMBER);
+	} 
+	else
+	{
+		temp_time();
+		
+		if(disp==0)
+		{
+			copy_buffer(disp_buffer, SEG_LED_NUMBER);
+		}
+		
+		if(led_timer==0)
+		{
+			led_timer=1;
+			display(disp, disp_buffer, SEG_LED_NUMBER);
+		}else
+			led_timer--;
+	}
 }
 
 #pragma vector=TIMERA1_VECTOR   // TIMERA1_VECTOR - wektor do obslugi capture, kanal 1, 2
@@ -192,7 +234,17 @@ __interrupt void timerA1_ISR(void)
             TACCTL1 |= CM_0;
             TACCTL2 &= ~CM_0;
             TACCTL2 |= CM_2;
-
+			
+			end_of_counting=0;
+			
+			// zerownie buffer 
+			buffer[0]=0;
+			buffer[1]=0;
+			buffer[2]=0;
+			buffer[3]=0;
+			buffer[4]=0;
+			buffer[5]=0;
+			
             break; //zrodlo TACCR1
 
         case 4: //flaga CCIFG
@@ -203,6 +255,7 @@ __interrupt void timerA1_ISR(void)
             TACCTL2 &= ~CM_2;
             TACCTL2 |= CM_0;
 
+			end_of_counting=1;
             break; //zrodlo TACCR2
     }       
 
