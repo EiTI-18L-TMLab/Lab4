@@ -110,17 +110,13 @@ void copy_buffer(int disp_buffer[], int SEG_LED_NUMBER)
 
 void display(static uint16_t disp, int disp_buffer[], int SEG_LED_NUMBER)
 {
-	if(led_timer==0) // start sekwencji wyswietlania, 1kHz/2
-    {
-        led_timer = 1; // co drugie wejscie do obslugi przerwania od timera
+	led_timer = 1; // co drugie wejscie do obslugi przerwania od timera
 
-        P3OUT = ~(1<<disp); //aktywujemy kolejny wyswietlacz
-        P2OUT = ((disp_buffer[disp])&0x0F) | LED_RBI | LED_BI | LED_LT | LED_DP; // wyswietlenie cyfry oraz bity sterujace
-        if(disp == SEG_LED_DOT_POSITION) P2OUT &= ~LED_DP; // zapalenie kropki na odpowiedniej pozycji
-        disp++; // wybor kolejnego wyswietlacza
-        if(disp >= SEG_LED_NUMBER) disp = 0;
-    }
-    else led_timer--;
+	P3OUT = ~(1<<disp); //aktywujemy kolejny wyswietlacz
+	P2OUT = ((disp_buffer[disp])&0x0F) | LED_RBI | LED_BI | LED_LT | LED_DP; // wyswietlenie cyfry oraz bity sterujace
+	if(disp == SEG_LED_DOT_POSITION) P2OUT &= ~LED_DP; // zapalenie kropki na odpowiedniej pozycji
+	disp++; // wybor kolejnego wyswietlacza
+	if(disp >= SEG_LED_NUMBER) disp = 0;
 }
 
 void preapare_to_display_ideal_value(captured_cycles cap_time)
@@ -211,7 +207,7 @@ __interrupt void timerA0_ISR(void) // timer 1kHz
 			copy_buffer(disp_buffer, SEG_LED_NUMBER);
 		}
 		
-		if(led_timer==0)
+		if(led_timer==0) // start sekwencji wyswietlania, 1kHz/2
 		{
 			led_timer=1;
 			display(disp, disp_buffer, SEG_LED_NUMBER);
