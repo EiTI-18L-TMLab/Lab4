@@ -15,6 +15,7 @@
         |--> Pin 2, start, CCI1A input - capture (kanal 1)
         |--> Pin 3, stop, CCI2A input - capture (kanal 2)
 
+
     Port 2 (P2) - obsluga drivera 7-seg LED
         |
         |--> DATA_A - P2OUT.0
@@ -26,7 +27,7 @@
         |--> LT     - P2OUT.6
         |--> DP     - P2OUT.7
 
-    Port 3 (P3) - wyb�r wy�wietlacza 7-segmentowego
+    Port 3 (P3) - wyborr wyswietlacza 7-segmentowego
         |
         |--> SEG_0 - P2OUT.0
         |--> SEG_1 - P2OUT.1
@@ -54,29 +55,31 @@
 #define LED_RBI (1<<4)
 
 // Ilosc wyswietlanych znakow
-#define SEG_LED_NUMBER 6
-#define SEG_LED_DOT_POSITION 3
+#define SEG_LED_NUMBER 7
+#define SEG_LED_DOT_POSITION 4
 #define SEG_LED_DISPLAY_SYSTEM 10
 
 volatile char buffer[SEG_LED_NUMBER]; // BUFOR ZLICZANIA CZASU REAKCJI
 volatile uint32_t count_time = 0; // wartosc czasu reakcji
 volatile bool if_counting = false;
+volatile bool end_of_counting=false;
 
-struct captured_cycles
+
+typedef struct captured_cycles
 {
     int start_time;
     int num_of_overflows;
     int end_time;
-}
+} captured_cycles;
 
 int get_cycles(captured_cycles time)
 {
-    return (num_of_overflows + 1)*1000 + end_time - start_time;
+    return (time.num_of_overflows + 1)*720 + time.end_time - time.start_time;
 }
 
 int get_time(int cycles)
 {
-    return (int)(cycles/1000);
+    return (int)(cycles/100);
 }
 
 void temp_time()
@@ -97,7 +100,7 @@ void temp_time()
     }
 }
 
-void copy_buffer(int disp_buffer[], int SEG_LED_NUMBER)
+void copy_buffer(char disp_buffer[])
 {
 	uint16_t n=0;
     while( n<SEG_LED_NUMBER )
@@ -105,26 +108,24 @@ void copy_buffer(int disp_buffer[], int SEG_LED_NUMBER)
         disp_buffer[n] = buffer[n]; // buffer mamy globalny
         n++;
     }
-    
 }
 
-void display(static uint16_t disp, int disp_buffer[], int SEG_LED_NUMBER)
+void display(uint16_t disp, char disp_buffer[])
 {
-	led_timer = 1; // co drugie wejscie do obslugi przerwania od timera
-
+	//static uint16_t disp = 0;
 	P3OUT = ~(1<<disp); //aktywujemy kolejny wyswietlacz
 	P2OUT = ((disp_buffer[disp])&0x0F) | LED_RBI | LED_BI | LED_LT | LED_DP; // wyswietlenie cyfry oraz bity sterujace
 	if(disp == SEG_LED_DOT_POSITION) P2OUT &= ~LED_DP; // zapalenie kropki na odpowiedniej pozycji
-	disp++; // wybor kolejnego wyswietlacza
-	if(disp >= SEG_LED_NUMBER) disp = 0;
+	//disp++; // wybor kolejnego wyswietlacza
+	//if(disp >= SEG_LED_NUMBER) disp = 0;
 }
 
 void preapare_to_display_ideal_value(captured_cycles cap_time)
 {
-    	locked_time = get_time(get_cycles(captured_cycles cap_time)); //zatrzaskujemy wartosc na czas sekwencji wyswietlania
+    	int locked_time = get_time(get_cycles(cap_time)); //zatrzaskujemy wartosc na czas sekwencji wyswietlania
 
         uint8_t n=0;
-		while(n<6)
+		while(n<SEG_LED_NUMBER)
 		{
 			buffer[n]=locked_time % 10;
 			locked_time /= 10;
@@ -132,20 +133,62 @@ void preapare_to_display_ideal_value(captured_cycles cap_time)
 		}
 }
 
-volatile captured_cycles cap_time;
-cap_time.start_time = 0;
-cap_time.num_of_overflows = 0;
-cap_time.end_time = 0;
+volatile captured_cycles cap_time = {0, 0, 0};
 
-int end_of_counting=0
+
 
 int main(void)
 {
     WDTCTL = WDTPW + WDTHOLD; // wylaczenie watchdoga
 
+    // inicjalizacja portu P1
+    P1SEL |= (BIT2 + BIT3); // ustaw P1.0 i P1.7 jako wejscia timera
+    P1DIR &= ~(BIT2 + BIT3); // ustaw jako wejscia
+    //P1OUT |= (BIT2 + BIT3); // pullup
+    //P1IES |= (BIT2 + BIT3); // zbocze opadajace
+    //P1IE = BIT7; //wlaczenie przerwan
+
+    // inicjalizacja portu P2
+    P2SEL = 0x00; // ustaw caly port 2 jako GPIO
+    P2DIR = 0xFF; // ustaw port 2 jako wyjscia
+    P2OUT =  0x70 + 0x80; // domyslnie zero
+
+    // inicjalizacja portu P3
+    P3SEL = 0x00; // ustaw caLy port 3 jako GPIO
+    P3DIR = 0xFF; // ustaw port 3 jako wyjscia
+    P3OUT = 0x0F; // wyswietl wszedzie zera
+
+/*
+    P2OUT =  0x70 +0x01; // domyslnie zero
+    P2OUT =  0x70 + 0x80+0x02; // domyslnie zero
+    P2OUT =  0xf0; // domyslnie zero
+    P2OUT =  0xf1; // domyslnie zero
+    P2OUT =  0xf2; // domyslnie zero
+    P2OUT =  0xf4; // domyslnie zero
+    P2OUT =  0xf8; // domyslnie zero
+    P2OUT =  0x1f; // domyslnie zero
+    P2OUT =  0x2f; // domyslnie zero
+    P2OUT =  0x4f; // domyslnie zero
+    P2OUT =  0x8f; // domyslnie zero
+
+
+    P2OUT =  0x8f; // domyslnie zero
+*/
+    // pomysl ficzera: test wyswietlaczy (zapalanie wszystkiego)
+
+
+    // POMIAR FREWUENCY TIMER INTERRUPT
+    P1DIR |= 0x80;
+
+    P1OUT |= 0x80;
+    P1DIR |= 0x40;
+
+    P1OUT |= 0x40;
+
+
     // Startujemy z wszystkimi bitamni na 0
     // Inicjacja kanalu 0, compare
-    TACCR0 = 1000; // 1 kHz
+    TACCR0 = 720; // 1 kHz
     TACCTL0 = CCIE;         // CCR0 interrupt enabled -OK -zalaczamy przerwania do timerow (jak nie zadziala wlaczac osobna TA i TB)
 
     // Inicjacja kanalu 1, capture, przycisk start
@@ -156,24 +199,6 @@ int main(void)
 
     // Inicjacja Timera A
     TACTL = TASSEL_2 + MC_1 + ID_0 + TAIE;           // SMCLK/8, upmode -OK SMCLK = 1MHz; MC_1 - UP MODE; ID_0 - dzielnik /1 (nie musi byc, ale niech bedzie)
-
-    // inicjalizacja portu P1
-    P1SEL |= (BIT2 + BIT3); // ustaw P1.0 i P1.7 jako wejscia timera
-    P1DIR &= ~(BIT2 + BIT3); // ustaw jako wejscia
-    P1OUT |= (BIT2 + BIT3); // pullup
-    //P1IES |= (BIT2 + BIT3); // zbocze opadajace
-    //P1IE = BIT7; //wlaczenie przerwan
-
-    // inicjalizacja portu P2
-    P2SEL = 0x00; // ustaw caly port 2 jako GPIO
-    P2DIR = 0xFF; // ustaw port 2 jako wyjscia
-    P2OUT = 0x00; // domyslnie zero
-
-    // inicjalizacja portu P3
-    P3SEL = 0x00; // ustaw caLy port 3 jako GPIO
-    P3DIR = 0xFF; // ustaw port 3 jako wyjscia
-    P3OUT = 0xFF; // wyswietl wszedzie zera
-    // pomysl ficzera: test wyswietlaczy (zapalanie wszystkiego)
 
     _bis_SR_register(CPUOFF+GIE); // LPM0, globalne wlaczenie obslugi przerwan
 
@@ -187,33 +212,42 @@ int main(void)
 
 #pragma vector=TIMERA0_VECTOR   // TIMERA0_VECTOR - wektor do obslugi compare, kanal 0
 __interrupt void timerA0_ISR(void) // timer 1kHz
-{   
+{
+    P1OUT |= 0x80;
+
+
     cap_time.num_of_overflows++;
     static uint16_t disp = 0; //ktory segment ma byc podswietlony
     static uint16_t led_timer = 0; //odswiezamy co drugie cykniecie
     static char disp_buffer[SEG_LED_NUMBER]; // Bufor wyswietlanych znakow
 
-	if(end_of_counting)
+	if(end_of_counting==true )
 	{
-		preapare_to_display_ideal_value(captured_cycles cap_time)
-		display(disp, disp_buffer, SEG_LED_NUMBER);
-	} 
-	else
+		preapare_to_display_ideal_value(cap_time);
+		//display(disp, disp_buffer);
+		end_of_counting = false;
+	}
+
+	if( if_counting==true )
 	{
 		temp_time();
-		
+
 		if(disp==0)
 		{
-			copy_buffer(disp_buffer, SEG_LED_NUMBER);
+			copy_buffer(disp_buffer);
 		}
-		
-		if(led_timer==0) // start sekwencji wyswietlania, 1kHz/2
-		{
-			led_timer=1;
-			display(disp, disp_buffer, SEG_LED_NUMBER);
-		}else
-			led_timer--;
 	}
+
+	if(led_timer==0) // start sekwencji wyswietlania, 1kHz/2
+	{
+		led_timer=1;
+		display(disp, disp_buffer);
+		disp++;
+		if(disp>= SEG_LED_NUMBER) disp = 0;
+	}else
+		led_timer--;
+
+    P1OUT &= ~0x80;
 }
 
 #pragma vector=TIMERA1_VECTOR   // TIMERA1_VECTOR - wektor do obslugi capture, kanal 1, 2
@@ -222,44 +256,52 @@ __interrupt void timerA1_ISR(void)
     switch(TAIV) //odczyt TAIV
     {
         case 2: //flaga CCIFG
+            P1OUT |= 0x40;
+        	if_counting = true;
             cap_time.start_time = TACCR1;
             cap_time.num_of_overflows = 0;
             cap_time.end_time = 0;
 
             TACCTL1 &= ~CM_2;
-            TACCTL1 |= CM_0;
             TACCTL2 &= ~CM_0;
+            TACCTL1 |= CM_0;
             TACCTL2 |= CM_2;
-			
-			end_of_counting=0;
-			
-			// zerownie buffer 
+
+			//end_of_counting=false;
+
+			// zerownie buffer
 			buffer[0]=0;
 			buffer[1]=0;
 			buffer[2]=0;
 			buffer[3]=0;
 			buffer[4]=0;
 			buffer[5]=0;
-			
+			buffer[6]=0;
+
             break; //zrodlo TACCR1
 
         case 4: //flaga CCIFG
+            P1OUT |= 0x40;
+        	if_counting = false;
             cap_time.end_time = TACCR2;
 
             TACCTL1 &= ~CM_0;
-            TACCTL1 |= CM_2;
             TACCTL2 &= ~CM_2;
+            TACCTL1 |= CM_2;
             TACCTL2 |= CM_0;
 
-			end_of_counting=1;
+
+			end_of_counting=true;
             break; //zrodlo TACCR2
-    }       
+    }
 
 
 
 
 
 
+
+    P1OUT &= ~0x40;
 
 
 
