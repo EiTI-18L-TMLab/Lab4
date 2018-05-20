@@ -75,7 +75,7 @@
 \caption{Schemat ideowy}
 \end{figure}
 
-Do portu pierwszego podłączyliśmy monostabilne wyłączniki (120_IN8), które posłużyły nam jako źródło sygnałów wejściowych, odpowiednio dla przycisku start – P1.2,  stop – P1.3. Dla wyświetlacza zostały zarezerwowane porty P2.0 – P2.7 (obsługa drivera) i P3.0 – P3.7 (wybór wyświetlacza 7-segmentowego). W Timer_A wykorzystujemy wszystkie trzy kanały dwa w trybie capture i jeden w trybie compare. 
+Do portu pierwszego podłączyliśmy monostabilne wyłączniki (120\_{}IN8), które posłużyły nam jako źródło sygnałów wejściowych, odpowiednio dla przycisku start – P1.2,  stop – P1.3. Dla wyświetlacza zostały zarezerwowane porty P2.0 – P2.7 (obsługa drivera) i P3.0 – P3.7 (wybór wyświetlacza 7-segmentowego). W Timer\_{}A wykorzystujemy wszystkie trzy kanały, dwa w trybie capture i jeden w trybie compare. 
 
 \section{Opis oprogramowania}
 
@@ -84,18 +84,265 @@ Do zmniejszenia poboru energii użyliśmy trybu LPM0, ponieważ tylko on gwarant
 \subsection{Zliczanie czasu}
 \indent 
 
-Naciśnięcie przycisku może nastąpić w momencie gdy jesteśmy na zboczu zegara, dlatego do dokładnego obliczania zmierzonego czasu zastosowaliśmy przerwania w trybie capture, dzięki którym jesteśmy w stanie określić pozycję w jakiej byliśmy na tym zboczu.  Zbocza liczników są opadające. Po uruchomieniu systemu i naciśnięciu przycisku – start, stoper zaczynał odliczanie. Zapamiętujemy miejsce na zboczu i zaczynamy zliczać ilość przepełnień licznika w celu obliczenia zmierzonego czasu. Przy naciśnięciu przycisku – stop, znowu zapamiętujemy miejsce na zboczu i używając wcześniej zapisanych danych obliczamy dokładny czas do wyświetlenia (dodajemy: czas od naciśnięcia przycisku start do przepełnienia, ilość przepełnień licznika, czas od naciśnięcia przycisku stop do przepełnienia) ??? TO W NAWIASIE CHYBA ZBĘDNE UZUPEŁNIENIE???. 
+Naciśnięcie przycisku może nastąpić w momencie gdy jesteśmy na zboczu zegara, dlatego do dokładnego obliczania zmierzonego czasu zastosowaliśmy przerwania w trybie capture, dzięki którym jesteśmy w stanie określić pozycję w jakiej byliśmy na tym zboczu.  Zbocza liczników są opadające. Po uruchomieniu systemu i naciśnięciu przycisku – start, stoper zaczynał odliczanie. Zapamiętujemy miejsce na zboczu i zaczynamy zliczać ilość przepełnień licznika w celu obliczenia zmierzonego czasu. Przy naciśnięciu przycisku – stop, znowu zapamiętujemy miejsce na zboczu i używając wcześniej zapisanych danych obliczamy dokładny czas do wyświetlenia.
+\begin{equation*}
+n_{cykli} = t_{konc} + (n_{overflow} + 1)*n_{graniczna} - t_{pocz} 
+\end{equation*} 
 
 \subsection{Obsługa wyświetlacza}
 \indent 
 
-Przy odświeżaniu wyświetlacza stosowaliśmy przerwania w trybie compare, generowane z tego samego Timera_A co przerwania w trybie capture. Ustawiona częstotliwość odświeżania to 720 kHz. Najpierw wybieramy wyświetlacz, który będziemy używać i potem dokonujemy wpisania wartości, która ma być wyświetlona. 
-???Po naciśnięciu start (zliczanie czasu uruchomione) z każdym przerwaniem od compare dodajemy wartość do zmiennej, która jest na bieżąco wyświetlana. Mamy świadomość, że nie jest to idealny czas, ale różnice są rzędu ms, czyli nie zdążymy nawet tego zauważyć. ???W dodatku liczba milisekund zmienia się tak szybko, że ciężko jest zaobserwować jak jest liczba na miejscu milisekund ??? Dokładnie wyliczona wartość (z użyciem przerwań capture) jest wyświetlana po naciśnięciu przycisku – stop, czyli po zatrzymaniu stopera. Dzięki temu użytkownik jest pewien, że otrzymuje dokładnie zmierzony czas. ???
-Aby czas wykonania przerwania nie był za długi przy wpisywaniu dokładnej wartości do tablicy stosujemy dzielenie modulo przez 10, co zapewnia nam satysfakcjonujące efekty i pozwala na szybkie wykonanie przerwania. Dodatkowo wyświetlanie wartości aktualnej jest aktualizowane co drugie przerwania, żeby maksymalnie, oczywiście w granicach normy skrócić czas wykonania przerwania. 
+W celu taktowania odświeżania wyświetlacza dynamicznego zastosowaliśmy przerwania generowane w trybie \texttt{compare} z Timera A. Przerwanie generuje się co określony takt czasu, w momencie gdy wartość licznika TAR zrównuje się z wartością zapisaną w kanale TACCR0, to ustawiana jest flaga przerwania (bit CCIFG w rejestrze TACCTL0) Ustawiona częstotliwość odświeżania to 1kHz. Zasada działania wyświetlacza dynamicznego jest następująca: najpierw wybieramy wyświetlacz, który będzie podświetlony, wypisujemy wartość i podtrzymujemy ją do przyjścia kolejnego przerwania. Aby wyświetlacz sprawiał wrażenie stałego, każdy segment powinien być odświeżany z częstotliwością większą niż 50 Hz. \\
+
+\indent Zasadniczym problemem podczas odświeżania wyświetlacza jest poprawne aktualizowanie wartości. Mając na uwadze zastosowanie aplikacyjne naszego rozwiązania zdecydowaliśmy się na liczenie czasu na dwa sposoby. Podczas aktywnego zliczania długości trwania impulsu, wyświetlana jest wartość zgrubna, obliczana z pomocą przerwań z trybu \texttt{compare}. Gdy użytkownik wciśnie przycisk \texttt{STOP} to wyświetlana jest wartość dokładna obliczana z wzoru przedstawionego w sekcji powyżej. \\
+ 
+\indent Aby czas wykonania przerwania nie był za długi przy wpisywaniu dokładnej wartości do tablicy stosujemy dzielenie modulo przez 10, co zapewnia nam satysfakcjonujące efekty i pozwala na szybkie wykonanie przerwania. Dodatkowo wyświetlanie wartości aktualnej jest aktualizowane co drugie przerwania, żeby maksymalnie, oczywiście w granicach normy skrócić czas wykonania przerwania. 
+
+Podczas fazy testów, za pomocą oscyloskopu sprawdziliśmy ile trwają przerwania podczas aktywnego zliczania i podczas oczekiwania na start. W trakcie oczekiwania na start, przerwanie obsługuje tylko zmianę segmentu i wartości na wyświetlaczu. Przerwanie zajmuje wtedy około 20 \%  czasu. W przypadku gdy zliczanie jest aktywne to czas obsługi przerwania wydłuża się do około 30 \% dostępnego czasu.
+ 
+\newpage
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{przerwania_bez.jpg}
+\caption{Oscylogram przedstawiający czas trwania przerwań bez aktywnego zliczania}
+\end{figure}
+
+\bigskip
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{przerwania_z.jpg}
+\caption{Oscylogram przedstawiający czas trwania przerwań z aktywnego zliczania}
+\end{figure}
 
 
+\newpage
 \subsection{Kod programu}
+\noindent
+Poniżej znajduje się kod programu napisanego w języku C:\\
 
-TU WKLEIĆ KOD :D
+\noindent\#include $<$msp430.h$>$\\
+\#include $<$stdio.h$>$\\
+\#include $<$stdint.h$>$\\
+
+\noindent\#define bool  uint\_{}t\\
+\#define true 1\\
+\#define false 0\\
+
+// Bity sterujace driverem 7-SEG LED\\
+\#define LED\_{}DP (1<<7)\\
+\#define LED\_{}LT (1<<6)\\
+\#define LED\_{}BI (1<<5)\\
+\#define LED\_{}RBI (1<<4)\\
+
+// Ilosc wyswietlanych znakow\\
+\#define SEG\_{}LED\_{}NUMBER 7\\
+\#define SEG\_{}LED\_{}DOT\_{}POSITION 5\\
+\#define SEG\_{}LED\_{}DISPLAY\_{}SYSTEM 10\\
+
+// Watrość rejestru licznika\\
+\#define TACCR0\_{}VALUE 720\\
+
+\noindent volatile char buffer[SEG\_{}LED\_{}NUMBER]; // BUFOR ZLICZANIA CZASU REAKCJI\\
+volatile uint32\_{}t count\_{}time = 0; // wartosc czasu reakcji\\
+volatile bool if\_{}counting = false;\\
+volatile bool end\_{}of\_{}counting=false;\\
+
+
+\noindent typedef struct captured\_{}cycles\\
+\{\\
+    int start\_{}time;\\
+    int num\_{}of\_{}overflows;\\
+    int end\_{}time;\\
+\} captured\_{}cycles;\\
+
+\noindent int get\_{}cycles(captured\_{}cycles time)\\
+\{\\
+    return (time.num\_{}of\_{}overflows + 1)*TACCR0\_{}VALUE + time.end\_{}time - time.start\_{}time;\\
+\}\\
+
+\noindent int get\_{}time(int cycles)\\
+\{\\
+    return (int)(cycles/10);\\
+\}\\
+
+\noindent void temp\_{}time()\\
+\{\\
+    uint16\_{}t n = SEG\_{}LED\_{}DOT\_{}POSITION-3; // zgrubny czas z dokładnością milisekundy\\
+    buffer[n]++; // odśwież pozycję milisekund\\
+    while( n<SEG\_{}LED\_{}NUMBER )\\
+    \{\\
+        if( buffer[n]>=SEG\_{}LED\_{}DISPLAY\_{}SYSTEM )\\
+        \{\\
+            buffer[n]=0;\\
+            buffer[n+1]++;\\
+            n++;\\
+       \}\\
+        else\\
+            break;\\
+    \}\\
+\}\\
+
+\noindent void copy\_{}buffer(char disp\_{}buffer[])\\
+\{\\
+	uint16\_{}t n=0;\\
+    while( n<SEG\_{}LED\_{}NUMBER )\\
+    \{\\
+        disp\_{}buffer[n] = buffer[n]; // buffer mamy globalny\\
+        n++;\\
+    \}\\
+\}\\
+
+\noindent void display(uint16\_{}t disp, char disp\_{}buffer[])\\
+\{\\
+	//static uint16\_{}t disp = 0;\\
+P3OUT = ~(1<<disp); //aktywujemy kolejny wyswietlacz\\
+P2OUT = ((disp\_{}buffer[disp])\&0x0F) $\vert$ LED\_{}RBI $\vert$ LED\_{}BI $\vert$ LED\_{}LT $\vert$ LED\_{}DP; // wyswietlenie cyfry oraz bity sterujace\\
+if(disp == SEG\_{}LED\_{}DOT\_{}POSITION) P2OUT \&= ~LED\_{}DP; // zapalenie kropki na odpowiedniej pozycji\\
+//disp++; // wybor kolejnego wyswietlacza\\
+//if(disp >= SEG\_{}LED\_{}NUMBER) disp = 0;\\
+\}\\
+
+\noindent void prepare\_{}to\_{}display\_{}ideal\_{}value(captured\_{}cycles cap\_{}time)\\
+\{\\
+    	int locked\_{}time = get\_{}time(get\_{}cycles(cap\_{}time)); //zatrzaskujemy wartosc na czas sekwencji wyswietlania\\
+
+        uint\_{}t n=0;\\
+		while(n<SEG\_{}LED\_{}NUMBER)\\
+		\{\\
+			buffer[n]=locked\_{}time \% 10;\\
+			locked\_{}time /= 10;\\
+			n++;\\
+		\}\\
+\}\\
+
+\noindent volatile captured\_{}cycles cap\_{}time = \{0, 0, 0\};\\
+
+
+
+\noindent int main(void)\\
+\{\\
+	// wylaczenie watchdoga\\
+    WDTCTL = WDTPW + WDTHOLD; \\
+
+    // inicjalizacja portu P1\\
+    P1SEL = (BIT2 + BIT3); // ustaw P1.0 i P1.7 jako wejscia timera\\
+    P1DIR \&= ~(BIT2 + BIT3); // ustaw jako wejscia\\
+    // piny portu 1 służące do debugowania zależności czasowych przy pomocy oscyloskopu\\
+    P1DIR $\vert$= BIT7 $\vert$ BIT6;\\
+    P1OUT $\vert$= BIT7 $\vert$ BIT6;\\
+	
+    // inicjalizacja portu P2\\
+    P2SEL = 0x00; // ustaw caly port 2 jako GPIO\\
+    P2DIR = 0xFF; // ustaw port 2 jako wyjscia\\
+    P2OUT =  (0x08\&0x0F) $\vert$ LED\_{}RBI $\vert$ LED\_{}BI $\vert$ LED\_{}LT /*$\vert$ LED\_{}DP*/; // wyswietlenie ósemki z kropką\\
+
+    // inicjalizacja portu P3\\
+    P3SEL = 0x00; // ustaw caLy port 3 jako GPIO\\
+    P3DIR = 0xFF; // ustaw port 3 jako wyjscia\\
+    P3OUT = 0x00; // aktywuj wszystkie wyświetlacze\\
+
+    // Inicjacja kanalu 0, compare\\
+    TACCR0 = TACCR0\_{}VALUE; // 1 kHz\\
+    TACCTL0 = CCIE;         // CCR0 interrupt enabled -OK -zalaczamy przerwania do timerow (jak nie zadziala wlaczac osobna TA i TB)\\
+    // Inicjacja kanalu 1, capture, przycisk start\\
+    TACCTL1 =  CM\_{}2 + SCS + CAP + CCIE + CCIS\_{}0;  // falling edge, synchronus capture, CCI1A\\
+    // Inicjacja kanalu 2, capture, przycisk stop\\
+    TACCTL2 =  CM\_{}0 + SCS + CAP + CCIE + CCIS\_{}0;  // falling edge, synchronus capture, CCI2A\\
+    // Inicjacja Timera A\\
+    TACTL = TASSEL\_{}2 + MC\_{}1 + ID\_{}0 + TAIE;         // SMCLK/8, upmode -OK SMCLK = 1MHz; MC\_{}1 - UP MODE; ID\_{}0 - dzielnik /1 (nie musi byc, ale niech bedzie)\\
+
+    \_{}bis\_{}SR\_{}register(CPUOFF+GIE); // LPM0, globalne wlaczenie obslugi przerwan\\
+
+    while(true)\\
+    \{\\
+
+    \}\\
+
+    return 0;\\
+\}\\
+
+\noindent \#pragma vector=TIMERA0\_{}VECTOR   // TIMERA0\_{}VECTOR - wektor do obslugi compare, kanal 0\\
+\_{}\_{}interrupt void timerA0\_{}ISR(void) // timer 1kHz\\
+\{\\
+    cap\_{}time.num\_{}of\_{}overflows++;\\
+    static uint16\_{}t disp = 0; //wybór aktywnego wyświetlacza\\
+    static uint16\_{}t led\_{}timer = 0; //timer programowy wyświetlacza dynamicznego\\
+    static char disp\_{}buffer[SEG\_{}LED\_{}NUMBER]; // Bufor wyswietlanych znakow\\
+
+	if(end\_{}of\_{}counting==true )\\
+	\{\\
+		prepare\_{}to\_{}display\_{}ideal\_{}value(cap\_{}time);\\
+		//display(disp, disp\_{}buffer);\\
+		end\_{}of\_{}counting = false;\\
+	\}\\
+
+	if( if\_{}counting==true )\\
+	\{\\
+		temp\_{}time();\\
+
+		if(disp==0)\\
+		\{\\
+			copy\_{}buffer(disp\_{}buffer);\\
+		\}\\
+	\}\\
+
+	if(led\_{}timer==0) // start sekwencji wyswietlania, 1kHz/2\\
+	\{\\
+		led\_{}timer=1;\\
+		display(disp, disp\_{}buffer);\\
+		disp++;\\
+		if(disp>= SEG\_{}LED\_{}NUMBER) disp = 0\\;
+	\}else\\
+		led\_{}timer--;\\
+
+    //P1OUT \&= ~0x80;\\
+\}\\
+
+\noindent \#pragma vector=TIMERA1\_{}VECTOR   // TIMERA1\_{}VECTOR - wektor do obslugi capture, kanal 1, 2\\
+\_{}\_{}interrupt void timerA1\_{}ISR(void)\\
+\{\\
+    switch(TAIV) //odczyt TAIV\\
+    \{\\
+        case 2: //flaga CCIFG\\
+            P1OUT $\vert$= 0x40;\\
+        	if\_{}counting = true;\\
+            cap\_{}time.start\_{}time = TACCR1;\\
+            cap\_{}time.num\_{}of\_{}overflows = 0;\\
+            cap\_{}time.end\_{}time = 0;\\
+
+            TACCTL1 \&= ~CM\_{}2;\\
+            TACCTL2 \&= ~CM\_{}0;\\
+            TACCTL1 $\vert$= CM\_{}0;\\
+            TACCTL2 $\vert$= CM\_{}2;\\
+
+			//end\_{}of\_{}counting=false;\\
+
+			// zerownie buffer\\
+			uint16\_{}t n=0;\\
+			while(n<SEG\_{}LED\_{}DOT\_{}POSITION)\\
+			\{\\
+				buffer[n] = 0;\\
+				n++\\
+			\}\\
+
+            break; //zrodlo TACCR1\\
+
+        case 4: //flaga CCIFG\\
+            P1OUT $\vert$= 0x40;\\
+        	if\_{}counting = false;\\
+            cap\_{}time.end\_{}time = TACCR2;\\
+
+            TACCTL1 \&= ~CM\_{}0;\\
+            TACCTL2 \&= ~CM\_{}2;\\
+            TACCTL1 $\vert$ = CM\_{}2;\\
+            TACCTL2 $\vert$= CM\_{}0;\\
+
+
+			end\_{}of\_{}counting=true;\\
+            break; //zrodlo TACCR2\\
+    \}\\
+\}\\
        
 \end{document}
