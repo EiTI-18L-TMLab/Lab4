@@ -56,8 +56,11 @@
 
 // Ilosc wyswietlanych znakow
 #define SEG_LED_NUMBER 7
-#define SEG_LED_DOT_POSITION 4
+#define SEG_LED_DOT_POSITION 5
 #define SEG_LED_DISPLAY_SYSTEM 10
+
+// Watrość rejestru licznika
+#define TACCR0_VALUE 720
 
 volatile char buffer[SEG_LED_NUMBER]; // BUFOR ZLICZANIA CZASU REAKCJI
 volatile uint32_t count_time = 0; // wartosc czasu reakcji
@@ -74,19 +77,18 @@ typedef struct captured_cycles
 
 int get_cycles(captured_cycles time)
 {
-    return (time.num_of_overflows + 1)*720 + time.end_time - time.start_time;
+    return (time.num_of_overflows + 1)*TACCR0_VALUE + time.end_time - time.start_time;
 }
 
 int get_time(int cycles)
 {
-    return (int)(cycles/100);
+    return (int)(cycles/10);
 }
 
 void temp_time()
 {
-    //count_time++; - bo juz mamy
-    buffer[0]++;
-    uint16_t n = 0;
+    uint16_t n = SEG_LED_DOT_POSITION-3; // zgrubny czas z dokładnością milisekundy
+    buffer[n]++; // odśwież pozycję milisekund
     while( n<SEG_LED_NUMBER )
     {
         if( buffer[n]>=SEG_LED_DISPLAY_SYSTEM )
@@ -139,64 +141,33 @@ volatile captured_cycles cap_time = {0, 0, 0};
 
 int main(void)
 {
-    WDTCTL = WDTPW + WDTHOLD; // wylaczenie watchdoga
+	// wylaczenie watchdoga
+    WDTCTL = WDTPW + WDTHOLD; 
 
     // inicjalizacja portu P1
-    P1SEL |= (BIT2 + BIT3); // ustaw P1.0 i P1.7 jako wejscia timera
+    P1SEL = (BIT2 + BIT3); // ustaw P1.0 i P1.7 jako wejscia timera
     P1DIR &= ~(BIT2 + BIT3); // ustaw jako wejscia
-    //P1OUT |= (BIT2 + BIT3); // pullup
-    //P1IES |= (BIT2 + BIT3); // zbocze opadajace
-    //P1IE = BIT7; //wlaczenie przerwan
-
+    // piny portu 1 służące do debugowania zależności czasowych przy pomocy oscyloskopu
+    P1DIR |= BIT7 | BIT6;
+    P1OUT |= BIT7 | BIT6;
+	
     // inicjalizacja portu P2
     P2SEL = 0x00; // ustaw caly port 2 jako GPIO
     P2DIR = 0xFF; // ustaw port 2 jako wyjscia
-    P2OUT =  0x70 + 0x80; // domyslnie zero
+    P2OUT =  (0x08&0x0F) | LED_RBI | LED_BI | LED_LT /*| LED_DP*/; // wyswietlenie ósemki z kropką
 
     // inicjalizacja portu P3
     P3SEL = 0x00; // ustaw caLy port 3 jako GPIO
     P3DIR = 0xFF; // ustaw port 3 jako wyjscia
-    P3OUT = 0x0F; // wyswietl wszedzie zera
+    P3OUT = 0x00; // aktywuj wszystkie wyświetlacze
 
-/*
-    P2OUT =  0x70 +0x01; // domyslnie zero
-    P2OUT =  0x70 + 0x80+0x02; // domyslnie zero
-    P2OUT =  0xf0; // domyslnie zero
-    P2OUT =  0xf1; // domyslnie zero
-    P2OUT =  0xf2; // domyslnie zero
-    P2OUT =  0xf4; // domyslnie zero
-    P2OUT =  0xf8; // domyslnie zero
-    P2OUT =  0x1f; // domyslnie zero
-    P2OUT =  0x2f; // domyslnie zero
-    P2OUT =  0x4f; // domyslnie zero
-    P2OUT =  0x8f; // domyslnie zero
-
-
-    P2OUT =  0x8f; // domyslnie zero
-*/
-    // pomysl ficzera: test wyswietlaczy (zapalanie wszystkiego)
-
-
-    // POMIAR FREWUENCY TIMER INTERRUPT
-    P1DIR |= 0x80;
-
-    P1OUT |= 0x80;
-    P1DIR |= 0x40;
-
-    P1OUT |= 0x40;
-
-
-    // Startujemy z wszystkimi bitamni na 0
     // Inicjacja kanalu 0, compare
-    TACCR0 = 720; // 1 kHz
+    TACCR0 = TACCR0_VALUE; // 1 kHz
     TACCTL0 = CCIE;         // CCR0 interrupt enabled -OK -zalaczamy przerwania do timerow (jak nie zadziala wlaczac osobna TA i TB)
-
     // Inicjacja kanalu 1, capture, przycisk start
     TACCTL1 =  CM_2 + SCS + CAP + CCIE + CCIS_0;  // falling edge, synchronus capture, CCI1A
-
     // Inicjacja kanalu 2, capture, przycisk stop
     TACCTL2 =  CM_0 + SCS + CAP + CCIE + CCIS_0;  // falling edge, synchronus capture, CCI2A
-
     // Inicjacja Timera A
     TACTL = TASSEL_2 + MC_1 + ID_0 + TAIE;           // SMCLK/8, upmode -OK SMCLK = 1MHz; MC_1 - UP MODE; ID_0 - dzielnik /1 (nie musi byc, ale niech bedzie)
 
@@ -207,18 +178,17 @@ int main(void)
 
     }
 
-    //return 0;
+    return 0;
 }
 
 #pragma vector=TIMERA0_VECTOR   // TIMERA0_VECTOR - wektor do obslugi compare, kanal 0
 __interrupt void timerA0_ISR(void) // timer 1kHz
 {
-    P1OUT |= 0x80;
-
+    //P1OUT |= 0x80;
 
     cap_time.num_of_overflows++;
-    static uint16_t disp = 0; //ktory segment ma byc podswietlony
-    static uint16_t led_timer = 0; //odswiezamy co drugie cykniecie
+    static uint16_t disp = 0; //wybór aktywnego wyświetlacza
+    static uint16_t led_timer = 0; //timer programowy wyświetlacza dynamicznego
     static char disp_buffer[SEG_LED_NUMBER]; // Bufor wyswietlanych znakow
 
 	if(end_of_counting==true )
@@ -247,7 +217,7 @@ __interrupt void timerA0_ISR(void) // timer 1kHz
 	}else
 		led_timer--;
 
-    P1OUT &= ~0x80;
+    //P1OUT &= ~0x80;
 }
 
 #pragma vector=TIMERA1_VECTOR   // TIMERA1_VECTOR - wektor do obslugi capture, kanal 1, 2
@@ -270,13 +240,12 @@ __interrupt void timerA1_ISR(void)
 			//end_of_counting=false;
 
 			// zerownie buffer
-			buffer[0]=0;
-			buffer[1]=0;
-			buffer[2]=0;
-			buffer[3]=0;
-			buffer[4]=0;
-			buffer[5]=0;
-			buffer[6]=0;
+			uint16_t n=0;
+			while(n<SEG_LED_DOT_POSITION)
+			{
+				buffer[n] = 0;
+				n++
+			}
 
             break; //zrodlo TACCR1
 
@@ -294,17 +263,7 @@ __interrupt void timerA1_ISR(void)
 			end_of_counting=true;
             break; //zrodlo TACCR2
     }
-
-
-
-
-
-
-
-    P1OUT &= ~0x40;
-
-
-
+    //P1OUT &= ~0x40;
 }
 
 
